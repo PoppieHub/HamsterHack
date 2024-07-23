@@ -47,19 +47,28 @@ class Account:
             return
 
         info = self.endpoint.sync()
-        last_time = time.time()
+        current_time = time.time()
 
         info = self.endpoint.tap(info, info.availableTaps)
 
-        profit = round(info.balanceCoins-self.info.balanceCoins)
+        profit = round(info.balanceCoins - self.info.balanceCoins)
         bal = f"{round(self.info.balanceCoins):,}"
-        pph = f"{round(profit*60*60/(last_time-self.last_time)):,}" if self.last_time else "Unknown"
 
-        self.logger.info(f"User: {Fore.RED}{self.account_info.name}{Fore.RESET} | "\
-            f"Bal: {Fore.GREEN}{bal}{Fore.RESET} (+{profit:,}) | "\
-            f"PPH: {Fore.CYAN}{pph}{Fore.RESET}")
+        # Проверка, чтобы избежать деления на ноль
+        if self.last_time:
+            elapsed_time = current_time - self.last_time
+            if elapsed_time > 0:
+                pph = f"{round(profit * 60 * 60 / elapsed_time):,}"
+            else:
+                pph = "Unknown"
+        else:
+            pph = "Unknown"
 
-        self.last_time = last_time
+        self.logger.info(f"User: {Fore.RED}{self.account_info.name}{Fore.RESET} | \n"
+                         f"Bal: {Fore.GREEN}{bal}{Fore.RESET} (+{profit:,}) | \n" 
+                         f"PPH: {Fore.CYAN}{pph}{Fore.RESET}")
+
+        self.last_time = current_time
         self.info = info
 
     def update(self):
@@ -87,7 +96,8 @@ class Account:
     def update_mining(self) -> bool:
         upgrades_for_buy = self.endpoint.upgrades_for_buy()
 
-        available_sections = [section.section for section in upgrades_for_buy.sections if section.isAvailable and section.section != "Specials"]
+        available_sections = [section.section for section in upgrades_for_buy.sections if
+                              section.isAvailable and section.section != "Specials"]
 
         upgrades = [up for up in upgrades_for_buy.upgradesForBuy if up.section in available_sections]
         upgrades = [up for up in upgrades if up.isAvailable and not up.isExpired and up.cooldownSeconds == 0]
@@ -96,18 +106,19 @@ class Account:
         if max_available == 0:
             return False
 
-        upgrades = [up for up in upgrades if up.price<self.info.balanceCoins]
+        upgrades = [up for up in upgrades if up.price < self.info.balanceCoins]
         best_upgrade = self.best_upgrade_option(upgrades)
 
         if best_upgrade:
-            if len(upgrades)/max_available < 0.6:
+            if len(upgrades) / max_available < 0.6:
                 return False
             try:
                 self.info = self.endpoint.buy_upgrade(best_upgrade)
             except:
                 raise Exception(f"Error when trying to buy {best_upgrade.id}")
 
-            self.logger.info(f"{Fore.RED}{self.account_info.name}{Fore.RESET} upgrade ({Fore.BLUE}{best_upgrade.name}{Fore.RESET}) to level ({Fore.GREEN}{best_upgrade.level+1}{Fore.RESET}) | Bal: {round(self.info.balanceCoins):,}")
+            self.logger.info(
+                f"{Fore.RED}{self.account_info.name}{Fore.RESET} upgrade ({Fore.BLUE}{best_upgrade.name}{Fore.RESET}) to level ({Fore.GREEN}{best_upgrade.level + 1}{Fore.RESET}) | Bal: {round(self.info.balanceCoins):,}")
             return True
 
         return False
